@@ -1,0 +1,11 @@
+[build]
+builder = "railpack"
+
+[deploy]
+startCommand = "python bot.py"
+
+[build.config]
+python = "3.12"
+
+[service]
+root = "Zuby_aktobe-iphone--main"
