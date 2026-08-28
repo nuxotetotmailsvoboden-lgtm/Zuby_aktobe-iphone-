@@ -24,6 +24,31 @@ logger = logging.getLogger(__name__)
 router = Router(name="booking")
 
 
+def _to_date(val):
+    """Конвертирует строку ISO в date, если нужно"""
+    if isinstance(val, date):
+        return val
+    if isinstance(val, str):
+        try:
+            return datetime.strptime(val, '%Y-%m-%d').date()
+        except:
+            return None
+    return val
+
+
+def _to_time(val):
+    """Конвертирует строку HH:MM в time, если нужно"""
+    if isinstance(val, time):
+        return val
+    if isinstance(val, str):
+        try:
+            h, m = map(int, val.split(':'))
+            return time(h, m)
+        except:
+            return None
+    return val
+
+
 @router.callback_query(F.data.startswith("service_"))
 async def process_service_selection(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
@@ -72,7 +97,8 @@ async def process_date_selection(callback: CallbackQuery, state: FSMContext):
 
     if not available_slots:
         alt_result = await BookingService.find_nearest_available(selected_date, time(9, 0), service_duration)
-        await state.update_data(selected_date=selected_date)
+        # Сохраняем как строку!
+        await state.update_data(selected_date=selected_date.isoformat())
         await callback.message.edit_text(
             f'📅 <b>{selected_date.strftime("%d.%m.%Y")}</b>\n\n'
             f'❌ На эту дату все слоты заняты.\n\n',
@@ -81,7 +107,8 @@ async def process_date_selection(callback: CallbackQuery, state: FSMContext):
         )
         return
 
-    await state.update_data(selected_date=selected_date)
+    # Сохраняем как строку!
+    await state.update_data(selected_date=selected_date.isoformat())
     await callback.message.edit_text(
         f'📅 <b>{selected_date.strftime("%d.%m.%Y")}</b>\n'
         f'🦷 {data.get("service", "Услуга")}\n\n'
@@ -109,7 +136,6 @@ async def show_more_dates(callback: CallbackQuery, state: FSMContext):
 
 @router.callback_query(BookingFSM.time, F.data == "booking_more_dates")
 async def back_to_dates_from_time(callback: CallbackQuery, state: FSMContext):
-    """Кнопка Назад из времени — возвращает к списку дат"""
     await callback.answer()
     data = await state.get_data()
     service_duration = data.get('service_duration', 60)
@@ -129,15 +155,17 @@ async def process_time_selection(callback: CallbackQuery, state: FSMContext):
     hours, minutes = map(int, time_str.split(':'))
     selected_time = time(hours, minutes)
     data = await state.get_data()
-    selected_date = data.get('selected_date')
+    selected_date = _to_date(data.get('selected_date'))  # конвертируем строку в date
     service = data.get('service', 'Услуга')
     service_duration = data.get('service_duration', 60)
-    await state.update_data(selected_time=selected_time)
+
+    # Сохраняем время как строку!
+    await state.update_data(selected_time=selected_time.strftime('%H:%M'))
 
     await callback.message.edit_text(
         '📋 <b>ПРОВЕРЬТЕ ДАННЫЕ:</b>\n\n'
         f'🦷 Услуга: <b>{service}</b>\n'
-        f'📅 Дата: <b>{selected_date.strftime("%d.%m.%Y")}</b>\n'
+        f'📅 Дата: <b>{selected_date.strftime("%d.%m.%Y") if selected_date else "—"}</b>\n'
         f'🕐 Время: <b>{selected_time.strftime("%H:%M")}</b>\n'
         f'⏱ Длительность: <b>{service_duration} мин</b>\n\n'
         f'Всё верно?',
@@ -154,12 +182,18 @@ async def confirm_booking(callback: CallbackQuery, state: FSMContext):
     telegram_id = callback.from_user.id
 
     try:
+        selected_date = _to_date(data.get('selected_date'))
+        selected_time = _to_time(data.get('selected_time'))
+
+        if not selected_date or not selected_time:
+            raise ValueError("Не выбрана дата или время")
+
         booking = await BookingService.book_slot(
             user_id=telegram_id,
             service=data.get('service', 'Услуга'),
             service_duration=data.get('service_duration', 60),
-            booking_date=data.get('selected_date'),
-            booking_time=data.get('selected_time'),
+            booking_date=selected_date,
+            booking_time=selected_time,
         )
         await AntiFraudService.update_score(telegram_id, 'booking')
         current_discount = await DiscountEngine.get_available_discount(telegram_id)
@@ -225,11 +259,14 @@ async def add_comment(callback: CallbackQuery, state: FSMContext):
 async def process_comment(message: Message, state: FSMContext):
     await state.update_data(comment=message.text[:500])
     data = await state.get_data()
+    selected_date = _to_date(data.get('selected_date'))
+    selected_time = _to_time(data.get('selected_time'))
+
     await message.answer(
         '📋 <b>ПРОВЕРЬТЕ ДАННЫЕ:</b>\n\n'
         f'🦷 Услуга: <b>{data.get("service", "Услуга")}</b>\n'
-        f'📅 Дата: <b>{data.get("selected_date").strftime("%d.%m.%Y")}</b>\n'
-        f'🕐 Время: <b>{data.get("selected_time").strftime("%H:%M")}</b>\n'
+        f'📅 Дата: <b>{selected_date.strftime("%d.%m.%Y") if selected_date else "—"}</b>\n'
+        f'🕐 Время: <b>{selected_time.strftime("%H:%M") if selected_time else "—"}</b>\n'
         f'⏱ Длительность: <b>{data.get("service_duration", 60)} мин</b>\n'
         f'💬 Комментарий: <i>{message.text[:500]}</i>\n\n'
         f'Подтвердить запись?',
@@ -242,14 +279,19 @@ async def process_comment(message: Message, state: FSMContext):
 @router.callback_query(F.data.startswith("alt_accept_"))
 async def accept_alternative(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
-    # Формат: alt_accept_2026-04-25_14-00
     data_part = callback.data.replace('alt_accept_', '')
-    parts = data_part.rsplit('_', 1)  # делим на дату и время
+    parts = data_part.rsplit('_', 1)
     alt_date = datetime.strptime(parts[0], '%Y-%m-%d').date()
     hours, minutes = map(int, parts[1].split('-'))
     alt_time = time(hours, minutes)
     data = await state.get_data()
-    await state.update_data(selected_date=alt_date, selected_time=alt_time)
+
+    # Сохраняем строки
+    await state.update_data(
+        selected_date=alt_date.isoformat(),
+        selected_time=alt_time.strftime('%H:%M')
+    )
+
     await callback.message.edit_text(
         '📋 <b>ПРОВЕРЬТЕ ДАННЫЕ:</b>\n\n'
         f'🦷 Услуга: <b>{data.get("service", "Услуга")}</b>\n'
@@ -267,11 +309,11 @@ async def accept_alternative(callback: CallbackQuery, state: FSMContext):
 async def search_again(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
     data = await state.get_data()
-    selected_date = data.get('selected_date')
+    selected_date = _to_date(data.get('selected_date'))
     service_duration = data.get('service_duration', 60)
     available_slots = await BookingService.get_available_slots(selected_date, service_duration)
     await callback.message.edit_text(
-        f'📅 <b>{selected_date.strftime("%d.%m.%Y")}</b>\n\nВыберите другое время:',
+        f'📅 <b>{selected_date.strftime("%d.%m.%Y") if selected_date else "—"}</b>\n\nВыберите другое время:',
         parse_mode='HTML',
         reply_markup=get_time_keyboard(available_slots, selected_date)
     )
