@@ -72,7 +72,7 @@ async def cmd_start(message: Message, state: FSMContext):
         await state.update_data(ref_code=ref_code)
     
     await message.answer(
-        '🦷 <b>Добро пожаловать в стоматологию "Zere Dent"!</b>\n\n'
+        '🦷 <b>Добро пожаловать в стоматологию "Тут Ваше имя"!</b>\n\n'
         'Давайте заполним анкету. Это займёт всего минуту.\n\n'
         '<b>Введите ваше имя:</b>\n'
         '<i>(только буквы, минимум 2 символа)</i>',
@@ -165,7 +165,7 @@ async def process_last_name(message: Message, state: FSMContext):
     await message.answer(
         f'✅ Фамилия: <b>{surname.title()}</b>\n\n'
         f'<b>Теперь отправьте ваш номер телефона:</b>\n'
-        f'<i>Пример: +79161234567</i>\n\n'
+        f'<i>Пример: +87771234567</i>\n\n'
         f'⚠️ Один номер — один аккаунт.',
         parse_mode="HTML"
     )
@@ -180,7 +180,7 @@ async def process_phone_manual(message: Message, state: FSMContext):
         await message.answer(
             '❌ <b>Некорректный номер телефона!</b>\n\n'
             'Введите номер в формате:\n'
-            '<i>+79161234567</i> или <i>89161234567</i>\n'
+            '<i>+7771234567</i> или <i>87771234567</i>\n'
             'Допустимы только цифры и знак +',
             parse_mode="HTML"
         )
@@ -202,7 +202,7 @@ async def process_phone_manual(message: Message, state: FSMContext):
         await message.answer(
             '❌ <b>Номер слишком длинный!</b>\n\n'
             'Введите корректный номер.\n'
-            '<i>Пример: +79161234567</i>',
+            '<i>Пример: +77771234567</i>',
             parse_mode="HTML"
         )
         return
