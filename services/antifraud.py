@@ -1,7 +1,6 @@
 import logging
 from datetime import datetime, timedelta
 from sqlalchemy import select
-from redis.asyncio import Redis
 
 from db.base import async_session
 from db.models import User, LogAction, Referral, Booking
@@ -27,14 +26,8 @@ class AntiFraudService:
     
     @staticmethod
     async def get_multiplier(telegram_id: int) -> float:
-        """
-        Получить множитель для колеса и наград
-        
-        Returns:
-            float: от 0.0 до 1.0
-        """
+        """Получить множитель для колеса и наград"""
         score = await AntiFraudService.get_score(telegram_id)
-        
         if score >= 80:
             return 1.0
         elif score >= 50:
@@ -50,26 +43,14 @@ class AntiFraudService:
                 select(User).where(User.telegram_id == telegram_id)
             )
             user = result.scalar_one_or_none()
-            
             if not user:
-                return 100  # Новые пользователи — 100
-            
+                return 100
             return user.fraud_score
     
     @staticmethod
     async def update_score(telegram_id: int, action: str) -> int:
-        """
-        Обновить fraud_score пользователя
-        
-        Args:
-            telegram_id: ID пользователя
-            action: действие из SCORE_ACTIONS
-        
-        Returns:
-            int: новый счёт
-        """
+        """Обновить fraud_score пользователя"""
         points = AntiFraudService.SCORE_ACTIONS.get(action, 0)
-        
         if points == 0:
             return await AntiFraudService.get_score(telegram_id)
         
@@ -78,7 +59,6 @@ class AntiFraudService:
                 select(User).where(User.telegram_id == telegram_id)
             )
             user = result.scalar_one_or_none()
-            
             if not user:
                 logger.warning(f"Попытка обновить счёт для несуществующего пользователя {telegram_id}")
                 return 100
@@ -87,19 +67,17 @@ class AntiFraudService:
             new_score = max(0, min(100, old_score + points))
             user.fraud_score = new_score
             
-            # Логируем
+            # ✅ Исправлено: логируем с user.id, а не telegram_id
             log = LogAction(
-                user_id=telegram_id,
+                user_id=user.id,
                 action=f"fraud_{action}",
                 details=f"Score: {old_score} → {new_score} ({points:+d})",
             )
             session.add(log)
-            
             await session.commit()
             
-            logger.info(f"Fraud score user_id={telegram_id}: {old_score} → {new_score} (action: {action})")
+            logger.info(f"Fraud score user_id={user.id}: {old_score} → {new_score} (action: {action})")
             
-            # Shadow ban при очень низком счёте
             if new_score <= 30 and not user.shadow_ban:
                 await AntiFraudService.apply_shadowban(telegram_id)
             
@@ -113,45 +91,34 @@ class AntiFraudService:
                 select(User).where(User.telegram_id == telegram_id)
             )
             user = result.scalar_one_or_none()
-            
             if user:
                 user.shadow_ban = True
                 user.fraud_score = max(0, user.fraud_score - 50)
                 
+                # ✅ Исправлено
                 log = LogAction(
-                    user_id=telegram_id,
+                    user_id=user.id,
                     action="shadow_ban",
                     details="Пользователь получил теневой бан",
                 )
                 session.add(log)
                 await session.commit()
                 
-                logger.warning(f"Shadow ban applied to user_id={telegram_id}")
+                logger.warning(f"Shadow ban applied to user_id={user.id}")
     
     @staticmethod
     async def detect_multiaccounts(telegram_id: int) -> bool:
-        """
-        Проверка на мультиаккаунты
-        
-        Проверяет:
-        - Много регистраций с одного IP (если есть логи)
-        - Быстрые рефералы друг за другом
-        - Одинаковые имена/телефоны
-        """
+        """Проверка на мультиаккаунты"""
         async with async_session() as session:
-            # Проверяем рефералов пользователя
             refs_result = await session.execute(
                 select(Referral).where(Referral.referrer_id == telegram_id)
             )
             refs = refs_result.scalars().all()
-            
-            # Если больше 10 рефералов за 24 часа — подозрительно
             if len(refs) > 10:
                 recent_refs = [r for r in refs if (datetime.utcnow() - r.created_at).days < 1]
                 if len(recent_refs) > 5:
                     await AntiFraudService.update_score(telegram_id, "suspicious_referral")
                     return True
-            
             return False
     
     @staticmethod
@@ -167,8 +134,6 @@ class AntiFraudService:
                 )
             )
             inactive_users = result.scalars().all()
-            
             for user in inactive_users:
                 await AntiFraudService.update_score(user.telegram_id, "no_actions_30days")
-            
             logger.info(f"Обработано {len(inactive_users)} неактивных пользователей")
