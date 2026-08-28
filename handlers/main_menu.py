@@ -286,12 +286,12 @@ async def show_contacts(callback: CallbackQuery):
     await callback.answer()
     await callback.message.edit_text(
         '📞 <b>КОНТАКТЫ</b>\n\n'
-        '🦷 <b>Стоматология Zere Dent</b>\n\n'
-        '📍 <b>Адрес:</b>\nг. Актобе, улица Есет батыра, 112\n\n'
-        '📱 <b>Телефон:</b>\n+7‒700‒291‒09‒57\n\n'
+        '🦷 <b>Стоматология "ИМЯ"</b>\n\n'
+        '📍 <b>Адрес:</b>\nг. АДРЕС (могу по 2гис проложить путь)\n\n'
+        '📱 <b>Телефон:</b>\n+7‒700‒123‒45‒67\n\n'
         '🕐 <b>Часы работы:</b>\nПн-Пт: 09:00 - 22:00\nСб: 10:00 - 20:00\nВс: выходной\n\n'
-        '📸 <b>Instagram:</b>\nhttps://www.instagram.com/zere_dent_aktobe\n\n'
-        '🌐 <b>Сайт:</b>\nhttps://www.instagram.com/zere_dent_aktobe',
+        '📸 <b>Instagram:</b>\nТУТ ССЫЛКА НА ВАШ ИНСТe\n\n'
+        '🌐 <b>Сайт:</b>\nТУТ ССЫЛКА,
         parse_mode="HTML",
         reply_markup=get_back_keyboard("menu_main")
     )
@@ -304,7 +304,7 @@ async def show_about(callback: CallbackQuery):
     await callback.answer()
     await callback.message.edit_text(
         'ℹ️ <b>О КЛИНИКЕ</b>\n\n'
-        '🦷 <b>Zere Dent</b> — современная стоматология\nс опытом работы более 10 лет.\n\n'
+        '🦷 <b>ВАЩА стомотология</b> — современная стоматология\nс опытом работы более N лет.\n\n'
         '✅ <b>Наши преимущества:</b>\n'
         '• Новейшее оборудование\n'
         '• Опытные врачи\n'
@@ -312,7 +312,7 @@ async def show_about(callback: CallbackQuery):
         '• Доступные цены\n'
         '• Стерильность и безопасность\n\n'
         '⭐ <b>Рейтинг:</b> 4.9/5\n'
-        '👥 <b>Более 5000 довольных пациентов</b>\n\n'
+        '👥 <b>Более N довольных пациентов</b>\n\n'
         'Запишитесь на бесплатную консультацию\nпрямо сейчас в разделе 📅 Запись на приём!',
         parse_mode="HTML",
         reply_markup=get_back_keyboard("menu_main")
