@@ -52,6 +52,16 @@ def _to_time(val):
     return val
 
 
+async def get_user_db_id(telegram_id: int):
+    """Получить внутренний id пользователя по telegram_id"""
+    async with async_session() as session:
+        result = await session.execute(
+            select(User).where(User.telegram_id == telegram_id)
+        )
+        user = result.scalar_one_or_none()
+        return user.id if user else None
+
+
 @router.callback_query(F.data.startswith("service_"))
 async def process_service_selection(callback: CallbackQuery, state: FSMContext):
     await callback.answer()
@@ -188,19 +198,14 @@ async def confirm_booking(callback: CallbackQuery, state: FSMContext):
         if not selected_date or not selected_time:
             raise ValueError("Не выбрана дата или время")
 
-        # Получаем ID пользователя из БД (т.к. bookings.user_id ссылается на users.id)
-        async with async_session() as session:
-            user_result = await session.execute(
-                select(User).where(User.telegram_id == telegram_id)
-            )
-            user = user_result.scalar_one_or_none()
-            if not user:
-                await callback.answer("Пользователь не найден. Зарегистрируйтесь через /start", show_alert=True)
-                return
-            user_db_id = user.id
+        # ✅ Главное исправление: получаем внутренний id пользователя
+        user_db_id = await get_user_db_id(telegram_id)
+        if not user_db_id:
+            await callback.answer("Пользователь не найден. Пройдите регистрацию через /start", show_alert=True)
+            return
 
         booking = await BookingService.book_slot(
-            user_id=user_db_id,   # <-- теперь корректный id
+            user_id=user_db_id,   # ← теперь правильный users.id
             service=data.get('service', 'Услуга'),
             service_duration=data.get('service_duration', 60),
             booking_date=selected_date,
@@ -334,7 +339,12 @@ async def search_again(callback: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == "booking_my")
 async def show_my_bookings(callback: CallbackQuery):
     await callback.answer()
-    bookings = await BookingService.get_user_bookings(callback.from_user.id)
+    user_db_id = await get_user_db_id(callback.from_user.id)
+    if not user_db_id:
+        await callback.answer("Пользователь не найден", show_alert=True)
+        return
+
+    bookings = await BookingService.get_user_bookings(user_db_id)
     if not bookings:
         await callback.message.edit_text(
             '📅 <b>МОИ ЗАПИСИ</b>\n\n<i>У вас пока нет записей.</i>\n\nЗапишитесь прямо сейчас!',
