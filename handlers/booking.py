@@ -19,6 +19,9 @@ from keyboards.main_menu import get_back_keyboard, get_main_menu_keyboard
 from services.booking_service import BookingService, SlotBusyException
 from services.discount import DiscountEngine
 from services.antifraud import AntiFraudService
+from db.base import async_session
+from db.models import User
+from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
 router = Router(name="booking")
@@ -97,7 +100,6 @@ async def process_date_selection(callback: CallbackQuery, state: FSMContext):
 
     if not available_slots:
         alt_result = await BookingService.find_nearest_available(selected_date, time(9, 0), service_duration)
-        # Сохраняем как строку!
         await state.update_data(selected_date=selected_date.isoformat())
         await callback.message.edit_text(
             f'📅 <b>{selected_date.strftime("%d.%m.%Y")}</b>\n\n'
@@ -107,7 +109,6 @@ async def process_date_selection(callback: CallbackQuery, state: FSMContext):
         )
         return
 
-    # Сохраняем как строку!
     await state.update_data(selected_date=selected_date.isoformat())
     await callback.message.edit_text(
         f'📅 <b>{selected_date.strftime("%d.%m.%Y")}</b>\n'
@@ -155,11 +156,10 @@ async def process_time_selection(callback: CallbackQuery, state: FSMContext):
     hours, minutes = map(int, time_str.split(':'))
     selected_time = time(hours, minutes)
     data = await state.get_data()
-    selected_date = _to_date(data.get('selected_date'))  # конвертируем строку в date
+    selected_date = _to_date(data.get('selected_date'))
     service = data.get('service', 'Услуга')
     service_duration = data.get('service_duration', 60)
 
-    # Сохраняем время как строку!
     await state.update_data(selected_time=selected_time.strftime('%H:%M'))
 
     await callback.message.edit_text(
@@ -188,13 +188,25 @@ async def confirm_booking(callback: CallbackQuery, state: FSMContext):
         if not selected_date or not selected_time:
             raise ValueError("Не выбрана дата или время")
 
+        # Получаем ID пользователя из БД (т.к. bookings.user_id ссылается на users.id)
+        async with async_session() as session:
+            user_result = await session.execute(
+                select(User).where(User.telegram_id == telegram_id)
+            )
+            user = user_result.scalar_one_or_none()
+            if not user:
+                await callback.answer("Пользователь не найден. Зарегистрируйтесь через /start", show_alert=True)
+                return
+            user_db_id = user.id
+
         booking = await BookingService.book_slot(
-            user_id=telegram_id,
+            user_id=user_db_id,   # <-- теперь корректный id
             service=data.get('service', 'Услуга'),
             service_duration=data.get('service_duration', 60),
             booking_date=selected_date,
             booking_time=selected_time,
         )
+
         await AntiFraudService.update_score(telegram_id, 'booking')
         current_discount = await DiscountEngine.get_available_discount(telegram_id)
 
@@ -286,7 +298,6 @@ async def accept_alternative(callback: CallbackQuery, state: FSMContext):
     alt_time = time(hours, minutes)
     data = await state.get_data()
 
-    # Сохраняем строки
     await state.update_data(
         selected_date=alt_date.isoformat(),
         selected_time=alt_time.strftime('%H:%M')
