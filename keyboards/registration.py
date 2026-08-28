@@ -15,7 +15,7 @@ def get_instagram_link_keyboard() -> InlineKeyboardMarkup:
     """Ссылка на Instagram"""
     builder = InlineKeyboardBuilder()
     builder.row(
-        InlineKeyboardButton(text="📸 Перейти в Instagram", url="ТУТ ВАША ССЫЛКАe"),
+        InlineKeyboardButton(text="📸 Перейти в Instagram", url="ТУТ ВАШ АККАУНТe"),
     )
     builder.row(
         InlineKeyboardButton(text="✅ Я подписался", callback_data="insta_check"),
