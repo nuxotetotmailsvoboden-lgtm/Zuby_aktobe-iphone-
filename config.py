@@ -28,9 +28,21 @@ class Settings:
 
     @property
     def DATABASE_URL(self) -> str:
-        if self.DATABASE_URL_RAW:
-            return self.DATABASE_URL_RAW
-        return f"postgresql+asyncpg://{os.getenv('DB_USER', 'postgres')}:{os.getenv('DB_PASS', '')}@{os.getenv('DB_HOST', 'localhost')}:{os.getenv('DB_PORT', '5432')}/{os.getenv('DB_NAME', 'dentist_db')}"
+        # Берём сырой URL из Railway
+        url = self.DATABASE_URL_RAW
+        if url:
+            # Преобразуем в asyncpg
+            if url.startswith("postgresql://"):
+                url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+            elif url.startswith("postgres://"):
+                url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+            return url
+        # fallback (если нет DATABASE_URL)
+        return (
+            f"postgresql+asyncpg://{os.getenv('PGUSER', 'postgres')}:"
+            f"{os.getenv('PGPASSWORD', '')}@{os.getenv('PGHOST', 'localhost')}:"
+            f"{os.getenv('PGPORT', '5432')}/{os.getenv('PGDATABASE', 'railway')}"
+        )
 
     @property
     def REDIS_URL(self) -> str:
