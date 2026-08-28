@@ -29,8 +29,10 @@ async def get_session() -> AsyncSession:
 
 
 async def init_db():
-    """Создать все таблицы"""
+    """Создать все таблицы (ВРЕМЕННО с пересозданием)"""
     async with engine.begin() as conn:
+        # ВНИМАНИЕ: удалит все данные! Только для однократного исправления структуры.
+        await conn.run_sync(Base.metadata.drop_all)
         await conn.run_sync(Base.metadata.create_all)
 
 
