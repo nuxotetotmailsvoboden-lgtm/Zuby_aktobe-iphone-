@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Каталог услуг</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: #f3f4f6; margin: 0; padding: 16px; }
+        .card { background: white; border-radius: 16px; padding: 16px; margin-bottom: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .title { font-weight: bold; font-size: 18px; margin-bottom: 4px; }
+        .price { color: #10b981; font-weight: bold; margin: 8px 0; }
+        button { background: #3b82f6; color: white; border: none; border-radius: 12px; padding: 12px; width: 100%; font-size: 16px; cursor: pointer; }
+        button:disabled { background: #9ca3af; }
+        input, select { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #d1d5db; border-radius: 8px; }
+        .success { color: #10b981; font-weight: bold; text-align: center; }
+    </style>
+</head>
+<body>
+    <h2>🛍 Выберите услугу</h2>
+    <div id="services"></div>
+    <div id="bookingForm" style="display:none;">
+        <h3>📅 Запись</h3>
+        <input type="date" id="date" min="">
+        <select id="time"></select>
+        <input type="text" id="name" placeholder="Ваше имя">
+        <input type="tel" id="phone" placeholder="+7XXXXXXXXXX">
+        <button id="bookBtn">Записаться</button>
+        <button id="backBtn" style="background:#6b7280; margin-top:8px;">Назад</button>
+        <p id="resultMsg" class="success"></p>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        let selectedService = null;
+        const services = [
+            { id: 1, name: "Стрижка мужская", price: 5000 },
+            { id: 2, name: "Стрижка женская", price: 8000 },
+            { id: 3, name: "Окрашивание", price: 15000 }
+        ];
+
+        function renderServices() {
+            const div = document.getElementById('services');
+            div.innerHTML = '';
+            services.forEach(s => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <div class="title">${s.name}</div>
+                    <div class="price">${s.price} ₸</div>
+                    <button onclick="selectService(${s.id})">Выбрать</button>
+                `;
+                div.appendChild(card);
+            });
+        }
+
+        function selectService(id) {
+            selectedService = services.find(s => s.id === id);
+            document.getElementById('services').style.display = 'none';
+            document.getElementById('bookingForm').style.display = 'block';
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('date').min = today;
+            generateTimeSlots();
+        }
+
+        function generateTimeSlots() {
+            const select = document.getElementById('time');
+            select.innerHTML = '';
+            for (let h = 10; h <= 20; h++) {
+                for (let m of ['00', '30']) {
+                    const option = document.createElement('option');
+                    option.value = `${h}:${m}`;
+                    option.text = `${h}:${m}`;
+                    select.appendChild(option);
+                }
+            }
+        }
+
+        document.getElementById('backBtn').onclick = () => {
+            document.getElementById('services').style.display = 'block';
+            document.getElementById('bookingForm').style.display = 'none';
+            document.getElementById('resultMsg').innerText = '';
+        };
+
+        document.getElementById('bookBtn').onclick = async () => {
+            const name = document.getElementById('name').value.trim();
+            const phone = document.getElementById('phone').value.trim();
+            const date = document.getElementById('date').value;
+            const time = document.getElementById('time').value;
+
+            if (!name || !phone || !date || !time) {
+                tg.showAlert('Заполните все поля');
+                return;
+            }
+
+            const phoneRegex = /^\+7\d{10}$/;
+            if (!phoneRegex.test(phone)) {
+                tg.showAlert('Номер должен быть в формате +7XXXXXXXXXX');
+                return;
+            }
+
+            document.getElementById('bookBtn').disabled = true;
+            document.getElementById('bookBtn').innerText = 'Отправка...';
+
+            try {
+                const res = await fetch('/api/create_booking', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        user_id: tg.initDataUnsafe.user.id,
+                        service_id: selectedService.id,
+                        service_name: selectedService.name,
+                        amount: selectedService.price,
+                        name, phone, date, time
+                    })
+                });
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    document.getElementById('resultMsg').innerText = '✅ Заявка отправлена! Администратор свяжется с вами.';
+                    tg.showAlert('Заявка отправлена!');
+                    tg.close();
+                } else {
+                    tg.showAlert('Ошибка: ' + (data.error || 'попробуйте позже'));
+                }
+            } catch(e) {
+                tg.showAlert('Ошибка соединения');
+            }
+            document.getElementById('bookBtn').disabled = false;
+            document.getElementById('bookBtn').innerText = 'Записаться';
+        };
+
+        renderServices();
+    </script>
+</body>
+</html>
