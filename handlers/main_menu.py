@@ -291,7 +291,7 @@ async def show_contacts(callback: CallbackQuery):
         '📱 <b>Телефон:</b>\n+7‒700‒123‒45‒67\n\n'
         '🕐 <b>Часы работы:</b>\nПн-Пт: 09:00 - 22:00\nСб: 10:00 - 20:00\nВс: выходной\n\n'
         '📸 <b>Instagram:</b>\nТУТ ССЫЛКА НА ВАШ ИНСТe\n\n'
-        '🌐 <b>Сайт:</b>\nТУТ ССЫЛКА,
+        '🌐 <b>Сайт:</b>\nТУТ ССЫЛКА',
         parse_mode="HTML",
         reply_markup=get_back_keyboard("menu_main")
     )
